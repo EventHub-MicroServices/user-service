@@ -3,6 +3,7 @@ kind: ConfigMap
 metadata:
   name: users-config
   namespace: {{ .Values.namespace }}
+
 data:
   PORT: "{{ .Values.config.PORT }}"
   DB_HOST: "{{ .Values.config.DB_HOST }}"

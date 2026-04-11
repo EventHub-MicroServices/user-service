@@ -7,6 +7,10 @@ image:
   tag: v1.1.1
   pullPolicy: IfNotPresent
 
+secret:
+  DB_USER: postgres
+  DB_PASSWORD: postgres
+  
 service:
   type: ClusterIP
   port: 8001
