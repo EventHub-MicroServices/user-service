@@ -14,14 +14,14 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # 5. Setup Java (for Sonar)
+    # 2. Setup Java
     - name: Setup Java
       uses: actions/setup-java@v3
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    # 2. SonarQube Scan
+    # 3. SonarQube Scan
     - name: SonarQube Scan
       id: sonar
       uses: SonarSource/sonarqube-scan-action@v2
@@ -33,7 +33,7 @@ jobs:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-    # 3. Quality Gate (FAILS pipeline)
+    # 4. Quality Gate
     - name: Quality Gate Check
       uses: SonarSource/sonarqube-quality-gate-action@v1
       timeout-minutes: 5
@@ -41,7 +41,7 @@ jobs:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-    # 4. Setup Python
+    # 5. Setup Python
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
@@ -52,7 +52,7 @@ jobs:
       run: |
         pip install -r requirements.txt
 
-    # 7. Snyk Scan (FAILS pipeline)
+    # 7. Snyk Scan
     - name: Snyk Scan
       id: snyk
       uses: snyk/actions/python@master
@@ -90,7 +90,6 @@ jobs:
     # ❌ FAILURE EMAILS
     # -------------------------------
 
-    # Sonar Failure
     - name: Sonar Failure Email
       if: failure() && steps.sonar.outcome == 'failure'
       uses: dawidd6/action-send-mail@v3
@@ -101,21 +100,17 @@ jobs:
         password: ${{ secrets.EMAIL_PASSWORD }}
         subject: "❌ SonarQube Failed - User Service"
         body: |
-          🚨 SonarQube Quality Gate Failed!
+          SonarQube Quality Gate Failed
 
           Repo: ${{ github.repository }}
-          Branch: ${{ github.ref_name }}
           Commit: ${{ github.sha }}
 
-          🔴 Code issues found.
-
-          🔗 Logs:
+          Logs:
           ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
         to: ${{ secrets.DEVOPS_EMAIL }}
         from: DevOps Alert
 
-    # Snyk Failure
     - name: Snyk Failure Email
       if: failure() && steps.snyk.outcome == 'failure'
       uses: dawidd6/action-send-mail@v3
@@ -126,44 +121,34 @@ jobs:
         password: ${{ secrets.EMAIL_PASSWORD }}
         subject: "❌ Snyk Failed - User Service"
         body: |
-          🚨 Snyk Vulnerabilities Detected!
+          Dependency vulnerabilities detected
 
           Repo: ${{ github.repository }}
-          Branch: ${{ github.ref_name }}
-          Commit: ${{ github.sha }}
 
-          🔴 Dependency vulnerabilities found.
-
-          🔗 Logs:
+          Logs:
           ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
         to: ${{ secrets.DEVOPS_EMAIL }}
         from: DevOps Alert
 
     # -------------------------------
-    # ⚠️ TRIVY WARNING
+    # ⚠️ TRIVY WARNING (IMPROVED)
     # -------------------------------
     - name: Trivy Warning Email
-      if: steps.trivy.outcome == 'success'
+      if: always()
       uses: dawidd6/action-send-mail@v3
       with:
         server_address: smtp.gmail.com
         server_port: 465
         username: ${{ secrets.EMAIL_USERNAME }}
         password: ${{ secrets.EMAIL_PASSWORD }}
-        subject: "⚠️ Docker Scan Warning - User Service"
+        subject: "⚠️ Docker Scan Completed - User Service"
         body: |
-          ⚠️ Docker Image scanned (Non-blocking)
+          Docker scan completed (non-blocking)
 
           Repo: ${{ github.repository }}
-          Branch: ${{ github.ref_name }}
-          Commit: ${{ github.sha }}
 
-          🔍 Vulnerabilities detected (MEDIUM/HIGH)
-
-          👉 Pipeline SUCCESS but review recommended
-
-          🔗 Logs:
+          Check vulnerabilities in logs:
           ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
         to: ${{ secrets.DEVOPS_EMAIL }}
@@ -182,15 +167,15 @@ jobs:
         password: ${{ secrets.EMAIL_PASSWORD }}
         subject: "✅ User Service Pipeline Success"
         body: |
-          🎉 Pipeline completed successfully!
+          All checks passed successfully
 
-          ✔ SonarQube Passed
-          ✔ Snyk Passed
-          ⚠️ Docker scanned (check warnings)
+          ✔ Sonar
+          ✔ Snyk
+          ✔ Docker Scan (non-blocking)
 
-          🚀 Image pushed successfully
+          Image pushed
 
-          🔗 Run:
+          Logs:
           ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
         to: ${{ secrets.DEVOPS_EMAIL }}
