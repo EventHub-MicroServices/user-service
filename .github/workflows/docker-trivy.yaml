@@ -1,4 +1,4 @@
-name: User Service - Docker Secure Pipeline
+name: User Service - Docker Secure Pipeline.
 
 on:
   workflow_dispatch:
