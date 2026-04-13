@@ -1,4 +1,4 @@
-name: User Service DevSecOps Pipeline
+name: User Service - Code Security Pipeline
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  pipeline:
+  code-security:
     runs-on: ubuntu-latest
 
     steps:
@@ -14,14 +14,14 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # 2. Setup Java
+    # 2. Setup Java (for Sonar)
     - name: Setup Java
       uses: actions/setup-java@v3
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    # 3. SonarQube Scan
+    # 3. SonarQube Scan (Custom Quality Gate applied in Sonar UI)
     - name: SonarQube Scan
       id: sonar
       uses: SonarSource/sonarqube-scan-action@v2
@@ -33,8 +33,9 @@ jobs:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-    # 4. Quality Gate
+    # 4. Quality Gate (FAILS pipeline)
     - name: Quality Gate Check
+      id: qualitygate
       uses: SonarSource/sonarqube-quality-gate-action@v1
       timeout-minutes: 5
       env:
@@ -49,10 +50,9 @@ jobs:
 
     # 6. Install Dependencies
     - name: Install Dependencies
-      run: |
-        pip install -r requirements.txt
+      run: pip install -r requirements.txt
 
-    # 7. Snyk Scan
+    # 7. Snyk Scan (FAIL if MEDIUM/HIGH)
     - name: Snyk Scan
       id: snyk
       uses: snyk/actions/python@master
@@ -61,37 +61,9 @@ jobs:
       with:
         args: --severity-threshold=medium
 
-    # 8. Build Docker Image
-    - name: Build Docker Image
-      run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/user-service:latest .
-
-    # 9. Trivy Scan (NON-BLOCKING)
-    - name: Scan Docker Image
-      id: trivy
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ secrets.DOCKER_USERNAME }}/user-service:latest
-        format: table
-        exit-code: 0
-        severity: HIGH,MEDIUM
-
-    # 10. Docker Login
-    - name: Docker Login
-      run: |
-        echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-    # 11. Push Docker Image
-    - name: Push Docker Image
-      run: |
-        docker push ${{ secrets.DOCKER_USERNAME }}/user-service:latest
-
-    # -------------------------------
-    # FAILURE EMAILS
-    # -------------------------------
-
+    # Sonar Failure Email
     - name: Sonar Failure Email
-      if: failure() && steps.sonar.outcome == 'failure'
+      if: failure() && steps.qualitygate.outcome == 'failure'
       uses: dawidd6/action-send-mail@v3
       with:
         server_address: smtp.gmail.com
@@ -100,17 +72,18 @@ jobs:
         password: ${{ secrets.EMAIL_PASSWORD }}
         subject: "SonarQube Failed - User Service"
         body: |
-          SonarQube Quality Gate Failed
+          SonarQube Quality Gate Failed.
 
           Repo: ${{ github.repository }}
           Commit: ${{ github.sha }}
 
-          Logs:
+          Check report:
           ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
         to: ${{ secrets.DEVOPS_EMAIL }}
         from: DevOps Alert
 
+    # Snyk Failure Email
     - name: Snyk Failure Email
       if: failure() && steps.snyk.outcome == 'failure'
       uses: dawidd6/action-send-mail@v3
@@ -121,42 +94,18 @@ jobs:
         password: ${{ secrets.EMAIL_PASSWORD }}
         subject: "Snyk Failed - User Service"
         body: |
-          Dependency vulnerabilities detected
+          Snyk found vulnerabilities.
 
           Repo: ${{ github.repository }}
+          Commit: ${{ github.sha }}
 
-          Logs:
+          Check logs:
           ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
         to: ${{ secrets.DEVOPS_EMAIL }}
         from: DevOps Alert
 
-    # -------------------------------
-    # TRIVY WARNING (IMPROVED)
-    # -------------------------------
-    - name: Trivy Warning Email
-      if: always()
-      uses: dawidd6/action-send-mail@v3
-      with:
-        server_address: smtp.gmail.com
-        server_port: 465
-        username: ${{ secrets.EMAIL_USERNAME }}
-        password: ${{ secrets.EMAIL_PASSWORD }}
-        subject: "Docker Scan Completed - User Service"
-        body: |
-          Docker scan completed (non-blocking)
-
-          Repo: ${{ github.repository }}
-
-          Check vulnerabilities in logs:
-          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-        to: ${{ secrets.DEVOPS_EMAIL }}
-        from: DevOps Alert
-
-    # -------------------------------
-    # SUCCESS EMAIL
-    # -------------------------------
+    # Success Email
     - name: Success Email
       if: success()
       uses: dawidd6/action-send-mail@v3
@@ -165,18 +114,11 @@ jobs:
         server_port: 465
         username: ${{ secrets.EMAIL_USERNAME }}
         password: ${{ secrets.EMAIL_PASSWORD }}
-        subject: "User Service Pipeline Success"
+        subject: "Code Security Passed"
         body: |
-          All checks passed successfully
+          SonarQube + Snyk passed successfully.
 
-          ✔ Sonar
-          ✔ Snyk
-          ✔ Docker Scan (non-blocking)
-
-          Image pushed
-
-          Logs:
-          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          You can now trigger Docker pipeline manually.
 
         to: ${{ secrets.DEVOPS_EMAIL }}
         from: DevOps Alert

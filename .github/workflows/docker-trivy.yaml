@@ -1,0 +1,110 @@
+name: User Service - Docker Secure Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker Image Tag (e.g., v1.0.0)"
+        required: true
+        default: "v1.0.0"
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Checkout
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # 2. Validate Tag Format (vX.X.X)
+    - name: Validate Image Tag
+      run: |
+        TAG="${{ github.event.inputs.image_tag }}"
+        echo "Using tag: $TAG"
+
+        if [[ ! $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Invalid tag format. Use v1.0.0"
+          exit 1
+        fi
+
+    # 3. Build Docker Image
+    - name: Build Docker Image
+      run: |
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/user-service:${{ github.event.inputs.image_tag }} .
+
+    # 4. Trivy Scan (FAIL on HIGH/MEDIUM)
+    - name: Trivy Scan
+      id: trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ secrets.DOCKER_USERNAME }}/user-service:${{ github.event.inputs.image_tag }}
+        format: table
+        exit-code: 1   # FAIL if vulnerabilities found
+        severity: HIGH,MEDIUM
+
+    # Trivy Failure Handling
+    - name: Delete Image if Vulnerable
+      if: failure() && steps.trivy.outcome == 'failure'
+      run: |
+        echo "Deleting vulnerable image..."
+        docker rmi ${{ secrets.DOCKER_USERNAME }}/user-service:${{ github.event.inputs.image_tag }} || true
+
+    - name: Trivy Failure Email
+      if: failure() && steps.trivy.outcome == 'failure'
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 465
+        username: ${{ secrets.EMAIL_USERNAME }}
+        password: ${{ secrets.EMAIL_PASSWORD }}
+        subject: "Docker Image Vulnerable - User Service"
+        body: |
+          Trivy detected vulnerabilities (HIGH/MEDIUM)
+
+          Image: user-service:${{ github.event.inputs.image_tag }}
+
+          Image NOT pushed to Docker Hub
+          Image deleted locally
+
+          Logs:
+          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+        to: ${{ secrets.DEVOPS_EMAIL }}
+        from: DevOps Alert
+
+    # 5. Docker Login (ONLY if scan passed)
+    - name: Docker Login
+      if: success()
+      run: |
+        echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+    # 6. Push Image (ONLY if clean)
+    - name: Push Docker Image
+      if: success()
+      run: |
+        docker push ${{ secrets.DOCKER_USERNAME }}/user-service:${{ github.event.inputs.image_tag }}
+
+    # Success Email
+    - name: Success Email
+      if: success()
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 465
+        username: ${{ secrets.EMAIL_USERNAME }}
+        password: ${{ secrets.EMAIL_PASSWORD }}
+        subject: "Docker Image Pushed Successfully"
+        body: |
+          Secure Docker Image Created & Pushed
+
+          Image: user-service:${{ github.event.inputs.image_tag }}
+
+          ✔ No HIGH/MEDIUM vulnerabilities found
+          ✔ Image pushed to Docker Hub
+
+          Logs:
+          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+        to: ${{ secrets.DEVOPS_EMAIL }}
+        from: DevOps Alert
