@@ -87,7 +87,7 @@ jobs:
         docker push ${{ secrets.DOCKER_USERNAME }}/user-service:latest
 
     # -------------------------------
-    # ❌ FAILURE EMAILS
+    # FAILURE EMAILS
     # -------------------------------
 
     - name: Sonar Failure Email
@@ -98,7 +98,7 @@ jobs:
         server_port: 465
         username: ${{ secrets.EMAIL_USERNAME }}
         password: ${{ secrets.EMAIL_PASSWORD }}
-        subject: "❌ SonarQube Failed - User Service"
+        subject: "SonarQube Failed - User Service"
         body: |
           SonarQube Quality Gate Failed
 
@@ -119,7 +119,7 @@ jobs:
         server_port: 465
         username: ${{ secrets.EMAIL_USERNAME }}
         password: ${{ secrets.EMAIL_PASSWORD }}
-        subject: "❌ Snyk Failed - User Service"
+        subject: "Snyk Failed - User Service"
         body: |
           Dependency vulnerabilities detected
 
@@ -132,7 +132,7 @@ jobs:
         from: DevOps Alert
 
     # -------------------------------
-    # ⚠️ TRIVY WARNING (IMPROVED)
+    # TRIVY WARNING (IMPROVED)
     # -------------------------------
     - name: Trivy Warning Email
       if: always()
@@ -142,7 +142,7 @@ jobs:
         server_port: 465
         username: ${{ secrets.EMAIL_USERNAME }}
         password: ${{ secrets.EMAIL_PASSWORD }}
-        subject: "⚠️ Docker Scan Completed - User Service"
+        subject: "Docker Scan Completed - User Service"
         body: |
           Docker scan completed (non-blocking)
 
@@ -155,7 +155,7 @@ jobs:
         from: DevOps Alert
 
     # -------------------------------
-    # ✅ SUCCESS EMAIL
+    # SUCCESS EMAIL
     # -------------------------------
     - name: Success Email
       if: success()
@@ -165,7 +165,7 @@ jobs:
         server_port: 465
         username: ${{ secrets.EMAIL_USERNAME }}
         password: ${{ secrets.EMAIL_PASSWORD }}
-        subject: "✅ User Service Pipeline Success"
+        subject: "User Service Pipeline Success"
         body: |
           All checks passed successfully
 
